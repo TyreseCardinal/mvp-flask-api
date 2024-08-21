@@ -1,30 +1,21 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from app.config import Config
-from dotenv import load_dotenv
-import os
+from flask_jwt_extended import JWTManager
+from .config import Config
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Initialize extensions
 db = SQLAlchemy()
-migrate = Migrate()
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
-
-    # Set secret key from environment variable
-    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
-
-    # Initialize extensions with the app
+    
     db.init_app(app)
-    migrate.init_app(app, db)
-
-    # Register blueprints
-    from app.routes import api
-    app.register_blueprint(api, url_prefix='/api')
-
+    
+    JWTManager(app)  # Initialize JWT Manager without assigning to a variable
+    
+    with app.app_context():
+        from .routes import api  # Import routes
+        app.register_blueprint(api)
+        db.create_all()  # Create tables if they don't exist
+        
     return app

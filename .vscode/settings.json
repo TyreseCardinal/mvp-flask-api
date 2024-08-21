@@ -12,7 +12,9 @@
             "database": "mvp",
             "username": "root",
             "connectionTimeout": 30000,
-            "name": "mvp"
+            "name": "mvp",
+            "password": "password"
         }
-    ]
+    ],
+    "python.analysis.typeCheckingMode": "basic"
 }
