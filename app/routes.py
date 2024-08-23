@@ -9,18 +9,21 @@ api = Blueprint("api", __name__)
 
 # Task Routes
 
+# GET Task by ID
 @api.route("/tasks", methods=["GET"])
 @jwt_required()
 def get_tasks():
     tasks = Tasks.query.all()
     return jsonify([task.to_dict() for task in tasks])
 
+# GET All Tasks
 @api.route("/tasks/<int:id>", methods=["GET"])
 @jwt_required()
 def get_task(id):
     task = Tasks.query.get_or_404(id)
     return jsonify(task.to_dict())
 
+# POST Create A New Task
 @api.route("/tasks", methods=["POST"])
 @jwt_required()
 def create_task():
@@ -47,6 +50,7 @@ def create_task():
     except Exception as e:
         return jsonify({"message": str(e)}), 400
 
+# PUT Update existing tasks
 @api.route("/tasks/<int:id>", methods=["PUT"])
 @jwt_required()
 def update_task(id):
@@ -65,6 +69,7 @@ def update_task(id):
     db.session.commit()
     return jsonify(task.to_dict())
 
+# DELETE Task by ID
 @api.route("/tasks/<int:id>", methods=["DELETE"])
 @jwt_required()
 def delete_task(id):
@@ -75,6 +80,7 @@ def delete_task(id):
 
 # Project Routes
 
+# GET All Projects
 @api.route("/projects", methods=["GET"])
 @jwt_required()
 def get_projects():
@@ -93,6 +99,7 @@ def get_projects():
         ]
     )
 
+# GET Project by Project ID
 @api.route("/projects/<int:project_id>", methods=["GET"])
 @jwt_required()
 def get_project(project_id):
@@ -108,6 +115,7 @@ def get_project(project_id):
         }
     )
 
+# POST Create A New Project
 @api.route("/projects", methods=["POST"])
 @jwt_required()
 def create_project():
@@ -130,7 +138,7 @@ def create_project():
     except Exception as e:
         return jsonify({"message": str(e)}), 400
 
-
+# PUT Update existing project details
 @api.route("/projects/<int:project_id>", methods=["PUT"])
 @jwt_required()
 def update_project(project_id):
@@ -150,6 +158,7 @@ def update_project(project_id):
         }
     )
 
+# DELETE Project by Project ID
 @api.route("/projects/<int:project_id>", methods=["DELETE"])
 @jwt_required()
 def delete_project(project_id):
@@ -159,8 +168,9 @@ def delete_project(project_id):
     return "Project Successfully deleted.", 204
 
 
+#  Login and Register Routes
 
-
+# POST Register New User
 @api.route("/register", methods=["POST"])
 def register():
     data = request.get_json()
@@ -174,7 +184,7 @@ def register():
     db.session.commit()
     return jsonify({"message": "User created successfully"}), 201
 
-
+# POST Login User with authenticated credentials
 @api.route("/login", methods=["POST"])
 def login():
     data = request.get_json()
