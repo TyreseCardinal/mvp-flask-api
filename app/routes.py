@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from app import db
-from app.models import Users, Projects, Tasks
+from app.models import Users, Projects, Tasks, UserProfile, UserSettings, Notifications, CalendarEvents
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
@@ -174,15 +174,36 @@ def delete_project(project_id):
 @api.route("/register", methods=["POST"])
 def register():
     data = request.get_json()
+    
+    # Check for missing fields
     if not all(key in data for key in ("username", "email", "password")):
         return jsonify({"message": "Missing required fields"}), 400
+
+    # Check for duplicate username or email
+    if Users.query.filter_by(username=data["username"]).first():
+        return jsonify({"message": "Username already exists"}), 409
+    
+    if Users.query.filter_by(email=data["email"]).first():
+        return jsonify({"message": "Email already registered"}), 409
+
+    # Hash the password
     hashed_password = generate_password_hash(data["password"], method="pbkdf2:sha256")
+    
+    # Create new user
     new_user = Users(
         username=data["username"], email=data["email"], password=hashed_password
     )
     db.session.add(new_user)
     db.session.commit()
+
+    # Create a default UserProfile for the new user
+    new_profile = UserProfile(user_id=new_user.id)
+    db.session.add(new_profile)
+    db.session.commit()
+
     return jsonify({"message": "User created successfully"}), 201
+
+
 
 # POST Login User with authenticated credentials
 @api.route("/login", methods=["POST"])
@@ -200,3 +221,195 @@ def login():
             "user_id": user.id
         }), 200
     return jsonify({"message": "Invalid credentials"}), 401
+
+
+@api.route('/user_profile', methods=['GET'])
+@jwt_required()
+def get_user_profile():
+    user_id = get_jwt_identity()['id']
+    
+    # Fetch the UserProfile for the current user
+    profile = UserProfile.query.filter_by(user_id=user_id).first()
+    
+    if not profile:
+        return jsonify({"message": "Profile not found"}), 404
+    
+    user = profile.user  # Access the related Users object
+
+    return jsonify({
+        "email": user.email,
+        "username": user.username,  # Correctly retrieve the username
+        "first_name": profile.first_name,
+        "last_name": profile.last_name,
+        "profile_picture": profile.profile_picture,
+        "bio": profile.bio,
+    }), 200
+
+
+
+@api.route("/user_profile", methods=["POST"])
+@jwt_required()
+def update_user_profile():
+    user_id = get_jwt_identity()['id']
+    data = request.get_json(id)
+
+    profile = UserProfile.query.filter_by(user_id=user_id).first()
+
+    if not profile:
+        return jsonify({"message": "User profile not found"}), 404
+
+    # Update the profile fields if they exist in the request
+    if "email" in data:
+        profile.email = data["email"]
+    if "username" in data:
+        profile.username = data["username"]
+    if "first_name" in data:
+        profile.first_name = data["first_name"]
+    if "last_name" in data:
+        profile.last_name = data["last_name"]
+    if "bio" in data:
+        profile.bio = data["bio"]
+    if "address" in data:
+        profile.address = data["address"]
+    if "phone_number" in data:
+        profile.phone_number = data["phone_number"]
+    if "profile_picture" in data:
+        profile.profile_picture = data["profile_picture"]
+    if "date_of_birth" in data:
+        profile.date_of_birth = data["date_of_birth"]
+
+    db.session.commit()
+
+    return jsonify({"message": "Profile updated successfully"}), 200
+
+
+
+@api.route('/user_settings', methods=['GET', 'POST'])
+@jwt_required()
+def manage_user_settings():
+    user_id = get_jwt_identity()
+
+    if request.method == 'GET':
+        settings = UserSettings.query.filter_by(user_id=user_id).first()
+        if settings:
+            return jsonify({
+                'notifications': settings.notifications,
+                'theme': settings.theme,
+                'language': settings.language
+            })
+        else:
+            return jsonify({'error': 'Settings not found'}), 404
+
+    if request.method == 'POST':
+        data = request.json
+        settings = UserSettings.query.filter_by(user_id=user_id).first()
+        if not settings:
+            settings = UserSettings(
+                user_id=user_id,
+                notifications=data.get('notifications', True),
+                theme=data.get('theme', 'light'),
+                language=data.get('language', 'en')
+            )
+            db.session.add(settings)
+        else:
+            settings.notifications = data.get('notifications', settings.notifications)
+            settings.theme = data.get('theme', settings.theme)
+            settings.language = data.get('language', settings.language)
+
+        db.session.commit()
+        return jsonify({'message': 'Settings updated successfully'})
+
+
+@api.route('/notifications', methods=['GET', 'POST'])
+@jwt_required()
+def manage_notifications():
+    user_id = get_jwt_identity()
+
+    if request.method == 'GET':
+        notifications = Notifications.query.filter_by(user_id=user_id).all()
+        return jsonify([{
+            'message': notification.message,
+            'status': notification.status,
+            'created_at': notification.created_at.isoformat()
+        } for notification in notifications])
+
+    if request.method == 'POST':
+        data = request.json
+        notification = Notifications(
+            user_id=user_id,
+            message=data['message'],
+            status='unread'
+        )
+        db.session.add(notification)
+        db.session.commit()
+        return jsonify({'message': 'Notification created successfully'})
+
+
+@api.route('/notifications/<int:notification_id>', methods=['PUT', 'DELETE'])
+@jwt_required()
+def update_delete_notification(notification_id):
+    user_id = get_jwt_identity()
+    notification = Notifications.query.filter_by(id=notification_id, user_id=user_id).first()
+
+    if not notification:
+        return jsonify({'error': 'Notification not found'}), 404
+
+    if request.method == 'PUT':
+        data = request.json
+        notification.status = data.get('status', notification.status)
+        db.session.commit()
+        return jsonify({'message': 'Notification updated successfully'})
+
+    if request.method == 'DELETE':
+        db.session.delete(notification)
+        db.session.commit()
+        return jsonify({'message': 'Notification deleted successfully'})
+
+
+@api.route('/calendar_events', methods=['GET', 'POST'])
+@jwt_required()
+def manage_calendar_events():
+    user_id = get_jwt_identity()
+
+    if request.method == 'GET':
+        events = CalendarEvents.query.filter_by(user_id=user_id).all()
+        return jsonify([{
+            'title': event.title,
+            'date': event.date.isoformat(),
+            'description': event.description
+        } for event in events])
+
+    if request.method == 'POST':
+        data = request.json
+        event = CalendarEvents(
+            user_id=user_id,
+            title=data['title'],
+            date=data['date'],
+            description=data.get('description')
+        )
+        db.session.add(event)
+        db.session.commit()
+        return jsonify({'message': 'Event created successfully'})
+
+
+@api.route('/calendar_events/<int:event_id>', methods=['PUT', 'DELETE'])
+@jwt_required()
+def update_delete_calendar_event(event_id):
+    user_id = get_jwt_identity()
+    event = CalendarEvents.query.filter_by(id=event_id, user_id=user_id).first()
+
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+
+    if request.method == 'PUT':
+        data = request.json
+        event.title = data.get('title', event.title)
+        event.date = data.get('date', event.date)
+        event.description = data.get('description', event.description)
+        db.session.commit()
+        return jsonify({'message': 'Event updated successfully'})
+
+    if request.method == 'DELETE':
+        db.session.delete(event)
+        db.session.commit()
+        return jsonify({'message': 'Event deleted successfully'})
