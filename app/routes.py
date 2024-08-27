@@ -4,6 +4,7 @@ from app.models import Users, Projects, Tasks, UserProfile, UserSettings, Notifi
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
+from flask_cors import cross_origin
 
 api = Blueprint("api", __name__)
 
@@ -225,62 +226,68 @@ def login():
 
 @api.route('/user_profile', methods=['GET'])
 @jwt_required()
+@cross_origin()
 def get_user_profile():
-    user_id = get_jwt_identity()['id']
+    user_id = get_jwt_identity()
+    user = profile.user_id  # Access the related Users object
     
     # Fetch the UserProfile for the current user
-    profile = UserProfile.query.filter_by(user_id=user_id).first()
+    profile = session.execute(select(UserProfile).filter_by(user_id=user_id)).scalar()
+
     
     if not profile:
         return jsonify({"message": "Profile not found"}), 404
     
-    user = profile.user  # Access the related Users object
+    if user:
+        return jsonify({
+            "email": "user.email",
+            "username": "user.username",  # Correctly retrieve the username
+            "first_name": "profile.first_name",
+            "last_name": "profile.last_name",
+            "profile_picture": "profile.profile_picture",
+            "bio": "profile.bio",
+            "address": "profile.address",
+            "phone_number": "profile.phone_number",
+            "profile_picture": "profile.profile_picture",
+            "date_of_birth": "profile.date_of_birth"
+        }), 200
 
-    return jsonify({
-        "email": user.email,
-        "username": user.username,  # Correctly retrieve the username
-        "first_name": profile.first_name,
-        "last_name": profile.last_name,
-        "profile_picture": profile.profile_picture,
-        "bio": profile.bio,
-    }), 200
-
+    else:
+        return jsonify({'msg': 'User not found'}), 404
 
 
 @api.route("/user_profile", methods=["POST"])
 @jwt_required()
 def update_user_profile():
     user_id = get_jwt_identity()['id']
-    data = request.get_json(id)
-
+    data = request.get_json()
+    
     profile = UserProfile.query.filter_by(user_id=user_id).first()
+    user = Users.query.get(user_id)
 
-    if not profile:
+    if not profile or not user:
         return jsonify({"message": "User profile not found"}), 404
 
-    # Update the profile fields if they exist in the request
+    # Update Users table
     if "email" in data:
-        profile.email = data["email"]
+        user.email = data["email"]
     if "username" in data:
-        profile.username = data["username"]
+        user.username = data["username"]
+
+    # Update UserProfile table
     if "first_name" in data:
         profile.first_name = data["first_name"]
     if "last_name" in data:
         profile.last_name = data["last_name"]
     if "bio" in data:
         profile.bio = data["bio"]
-    if "address" in data:
-        profile.address = data["address"]
-    if "phone_number" in data:
-        profile.phone_number = data["phone_number"]
     if "profile_picture" in data:
         profile.profile_picture = data["profile_picture"]
-    if "date_of_birth" in data:
-        profile.date_of_birth = data["date_of_birth"]
 
     db.session.commit()
 
     return jsonify({"message": "Profile updated successfully"}), 200
+
 
 
 

@@ -75,6 +75,11 @@ class UserProfile(db.Model):
     last_name = db.Column(db.String(50))
     profile_picture = db.Column(db.String(255))
     bio = db.Column(db.Text)
+    address = db.Column(db.String(255))
+    phone_number = db.Column(db.String(15))
+    profile_picture = db.Column(db.String(255))
+    date_of_birth = db.Column(db.Date)
+
     
     # Relationship to Users
     user = db.relationship('Users', back_populates='profile')
